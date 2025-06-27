@@ -51,7 +51,9 @@ def get_top_gainers():
         return pd.DataFrame(res.json()).head(10)
     except:
         return pd.DataFrame()
+#-----------------
 
+#---------------------------------
 # مؤشرات فنية
 def calculate_indicators(df):
     required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
