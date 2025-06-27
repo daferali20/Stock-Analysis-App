@@ -54,6 +54,14 @@ def get_top_gainers():
 
 # مؤشرات فنية
 def calculate_indicators(df):
+    # التأكد من أن الأعمدة الأساسية موجودة ولا تحتوي على NaN
+    required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = np.nan
+    df = df.dropna(subset=required_cols)
+
+    # تطبيق المؤشرات الفنية
     df = add_all_ta_features(
         df,
         open="Open",
