@@ -54,14 +54,16 @@ def get_top_gainers():
 
 # مؤشرات فنية
 def calculate_indicators(df):
-    # التأكد من أن الأعمدة الأساسية موجودة ولا تحتوي على NaN
     required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-    for col in required_cols:
-        if col not in df.columns:
-            df[col] = np.nan
+    missing = [col for col in required_cols if col not in df.columns]
+    if missing:
+        raise ValueError(f"البيانات تفتقد الأعمدة التالية: {missing}")
+
     df = df.dropna(subset=required_cols)
 
-    # تطبيق المؤشرات الفنية
+    if df.empty:
+        raise ValueError("بيانات السهم غير كافية بعد التنظيف.")
+
     df = add_all_ta_features(
         df,
         open="Open",
@@ -93,14 +95,28 @@ def train_model(X, y):
 
 # تحليل سهم واحد
 def analyze_stock(ticker):
-    df = yf.download(ticker, period="6mo")
-    df = calculate_indicators(df)
-    X, y = prepare_data(df)
-    model, acc = train_model(X, y)
-    pred = model.predict(X.tail(1))[0]
-    st.metric("السعر الحالي", f"{df['Close'].iloc[-1]:.2f}")
-    st.metric("دقة النموذج", f"{acc*100:.2f}%")
-    st.metric("التوقع", "⬆️ ارتفاع" if pred else "⬇️ انخفاض")
+    try:
+        df = yf.download(ticker, period="6mo")
+        if df.empty:
+            st.warning(f"لا توجد بيانات للسهم {ticker}.")
+            return
+
+        df = calculate_indicators(df)
+        X, y = prepare_data(df)
+
+        if X.empty or y.empty:
+            st.warning(f"البيانات غير كافية للسهم {ticker} بعد التحضير.")
+            return
+
+        model, acc = train_model(X, y)
+        pred = model.predict(X.tail(1))[0]
+
+        st.metric("السعر الحالي", f"{df['Close'].iloc[-1]:.2f}")
+        st.metric("دقة النموذج", f"{acc*100:.2f}%")
+        st.metric("التوقع", "⬆️ ارتفاع" if pred else "⬇️ انخفاض")
+
+    except Exception as e:
+        st.error(f"❌ حدث خطأ أثناء تحليل السهم {ticker}: {str(e)}")
 
 # الإدخال
 tickers = st.text_input("🔍 أدخل رموز الأسهم (مفصولة بفاصلة)", "AAPL,MSFT,TSLA")
