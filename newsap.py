@@ -54,14 +54,16 @@ def get_top_gainers():
 
 # مؤشرات فنية
 def calculate_indicators(df):
-    df['RSI'] = RSIIndicator(close=df['Close']).rsi().fillna(50)
-    bb = BollingerBands(close=df['Close'])
-    df['BB_high'] = bb.bollinger_hband()
-    df['BB_low'] = bb.bollinger_lband()
-    macd = MACD(close=df['Close'])
-    df['MACD'] = macd.macd()
-    df['MACD_signal'] = macd.macd_signal()
-    return df.fillna(method='bfill')
+    df = add_all_ta_features(
+        df,
+        open="Open",
+        high="High",
+        low="Low",
+        close="Close",
+        volume="Volume",
+        fillna=True
+    )
+    return df
 
 # تحضير البيانات للتصنيف
 def prepare_data(df):
@@ -69,7 +71,7 @@ def prepare_data(df):
     df['Return'] = df['Close'].pct_change()
     df['Volatility'] = df['Return'].rolling(5).std()
     df = df.dropna()
-    X = df[['Open', 'High', 'Low', 'Volume', 'RSI', 'MACD', 'Volatility']]
+    X = df[['Open', 'High', 'Low', 'Volume', 'momentum_rsi', 'trend_macd', 'Volatility']]
     y = df['Target']
     return X, y
 
