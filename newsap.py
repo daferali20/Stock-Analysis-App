@@ -93,33 +93,91 @@ def train_model(X, y):
     acc = accuracy_score(y_test, model.predict(X_test))
     return model, acc
 
-# تحليل سهم واحد
+# تحليل سهم واحد (النسخة المحسنة)
 def analyze_stock(ticker):
     try:
-        df = yf.download(ticker, period="6mo")
+        # تحميل البيانات مع فترة أطول لضمان وجود بيانات كافية
+        df = yf.download(ticker, period="1y")
+        
         if df.empty:
-            st.warning(f"لا توجد بيانات للسهم {ticker}.")
+            st.warning(f"⚠️ لا توجد بيانات متاحة للسهم {ticker} على Yahoo Finance.")
             return
-
-        df = calculate_indicators(df)
-        X, y = prepare_data(df)
-
-        if X.empty or y.empty:
-            st.warning(f"البيانات غير كافية للسهم {ticker} بعد التحضير.")
+            
+        # فحص الأعمدة المطلوبة
+        required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        
+        if missing_cols:
+            st.warning(f"⚠️ البيانات المطلوبة غير متوفرة للسهم {ticker}. الأعمدة المفقودة: {missing_cols}")
+            st.write("البيانات المتاحة:", df.columns.tolist())
             return
-
-        model, acc = train_model(X, y)
-        pred = model.predict(X.tail(1))[0]
-
-        st.metric("السعر الحالي", f"{df['Close'].iloc[-1]:.2f}")
-        st.metric("دقة النموذج", f"{acc*100:.2f}%")
-        st.metric("التوقع", "⬆️ ارتفاع" if pred else "⬇️ انخفاض")
-
+            
+        # فحص وجود قيم فارغة
+        if df[required_cols].isnull().values.any():
+            st.warning(f"⚠️ يوجد قيم فارغة في بيانات السهم {ticker}. يتم تنظيف البيانات...")
+            df = df.dropna(subset=required_cols)
+            
+        if df.empty:
+            st.warning(f"⚠️ لا توجد بيانات كافية للسهم {ticker} بعد التنظيف.")
+            return
+            
+        # حساب المؤشرات الفنية
+        try:
+            df = calculate_indicators(df)
+        except Exception as e:
+            st.error(f"❌ خطأ في حساب المؤشرات الفنية لـ {ticker}: {str(e)}")
+            return
+            
+        # تحضير البيانات للتدريب
+        try:
+            X, y = prepare_data(df)
+            
+            if X.empty or y.empty:
+                st.warning(f"⚠️ البيانات غير كافية للتدريب للسهم {ticker}.")
+                return
+                
+            # تدريب النموذج
+            model, acc = train_model(X, y)
+            pred = model.predict(X.tail(1))[0]
+            
+            # عرض النتائج
+            col1, col2, col3 = st.columns(3)
+            col1.metric("السعر الحالي", f"{df['Close'].iloc[-1]:.2f}")
+            col2.metric("دقة النموذج", f"{acc*100:.2f}%")
+            col3.metric("التوقع غداً", "⬆️ ارتفاع" if pred else "⬇️ انخفاض")
+            
+            # عرض بيانات السهم
+            st.subheader("📈 بيانات السهم التاريخية")
+            st.dataframe(df.tail(10))
+            
+        except Exception as e:
+            st.error(f"❌ خطأ في تحليل البيانات لـ {ticker}: {str(e)}")
+            
     except Exception as e:
-        st.error(f"❌ حدث خطأ أثناء تحليل السهم {ticker}: {str(e)}")
+        st.error(f"❌ فشل تحميل بيانات السهم {ticker}: {str(e)}")
 
-# الإدخال
-tickers = st.text_input("🔍 أدخل رموز الأسهم (مفصولة بفاصلة)", "AAPL,MSFT,TSLA")
-for t in tickers.split(','):
-    st.subheader(f"📌 التحليل الفني - {t.strip().upper()}")
-    analyze_stock(t.strip().upper())
+# عرض الأخبار والاسهم الصاعدة
+st.sidebar.header("📰 الأخبار المالية")
+news = get_financial_news()
+for article in news[:5]:
+    st.sidebar.write(f"### {article['title']}")
+    st.sidebar.write(article['description'])
+    st.sidebar.write("---")
+
+st.sidebar.header("🚀 الأسهم الأكثر صعوداً")
+gainers = get_top_gainers()
+if not gainers.empty:
+    st.sidebar.dataframe(gainers)
+else:
+    st.sidebar.warning("لا يمكن جلب بيانات الأسهم الصاعدة")
+
+# الإدخال الرئيسي
+st.header("🔍 تحليل الأسهم")
+tickers = st.text_input("أدخل رموز الأسهم (مفصولة بفاصلة)", "AAPL,MSFT,TSLA,GOOGL")
+
+if st.button("تحليل الأسهم"):
+    for t in tickers.split(','):
+        t = t.strip().upper()
+        if t:  # تأكد من أن الرمز غير فارغ
+            st.subheader(f"📌 التحليل الفني - {t}")
+            analyze_stock(t)
